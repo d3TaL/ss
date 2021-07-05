@@ -23,8 +23,8 @@
 #include <binder/ProcessState.h>
 #include <hidl/HidlTransportSupport.h>
 
+#include "DisplayModes.h"
 #include "PictureAdjustment.h"
-#include "SunlightEnhancement.h"
 
 #define SDM_DISP_LIB "libsdm-disp-vndapis.so"
 
@@ -34,10 +34,10 @@ using android::status_t;
 using android::hardware::configureRpcThreadpool;
 using android::hardware::joinRpcThreadpool;
 
+using ::vendor::lineage::livedisplay::V2_0::IDisplayModes;
 using ::vendor::lineage::livedisplay::V2_0::IPictureAdjustment;
-using ::vendor::lineage::livedisplay::V2_0::ISunlightEnhancement;
 using ::vendor::lineage::livedisplay::V2_0::sdm::PictureAdjustment;
-using ::vendor::lineage::livedisplay::V2_0::sysfs::SunlightEnhancement;
+using ::vendor::lineage::livedisplay::V2_0::sysfs::DisplayModes;
 
 int main() {
     // Vendor backend
@@ -47,8 +47,8 @@ int main() {
     uint64_t cookie = 0;
 
     // HIDL frontend
+    sp<DisplayModes> dm;
     sp<PictureAdjustment> pa;
-    sp<SunlightEnhancement> se;
 
     status_t status = OK;
 
@@ -90,34 +90,33 @@ int main() {
         goto shutdown;
     }
 
-    se = new SunlightEnhancement();
-    if (se == nullptr) {
-        LOG(ERROR) << "Can not create an instance of LiveDisplay HAL SunlightEnhancement Iface, "
-                      "exiting.";
-        goto shutdown;
-    }
-
     if (!pa->isSupported()) {
         // Backend isn't ready yet, so restart and try again
         goto shutdown;
     }
 
+    dm = new DisplayModes();
+    if (dm == nullptr) {
+        LOG(ERROR) << "Can not create an instance of LiveDisplay HAL DisplayModes Iface, exiting.";
+        goto shutdown;
+    }
+
     configureRpcThreadpool(1, true /*callerWillJoin*/);
+
+    if (dm->isSupported()) {
+        status = dm->registerAsService();
+        if (status != OK) {
+            LOG(ERROR) << "Could not register service for LiveDisplay HAL DisplayModes Iface ("
+                       << status << ")";
+            goto shutdown;
+        }
+    }
 
     if (pa->isSupported()) {
         status = pa->registerAsService();
         if (status != OK) {
             LOG(ERROR) << "Could not register service for LiveDisplay HAL PictureAdjustment Iface ("
                        << status << ")";
-            goto shutdown;
-        }
-    }
-
-    if (se->isSupported()) {
-        status = se->registerAsService();
-        if (status != OK) {
-            LOG(ERROR) << "Could not register service for LiveDisplay HAL SunlightEnhancement Iface"
-                       << " (" << status << ")";
             goto shutdown;
         }
     }
